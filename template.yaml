@@ -1,11 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  datalake-calculation-app
 
-  Sample SAM Template for datalake-calculation-app
   
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 3
@@ -13,30 +9,152 @@ Globals:
 
 Resources:
   HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: hello-world/
       Handler: app.lambdaHandler
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Architectures:
         - x86_64
       Events:
         HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api 
           Properties:
             Path: /hello
             Method: get
 
-Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: "Hello World Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+# IAM Role - start
+  AWSGlueETLJobRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: Glue_ETL_Job
+      Description: Allows ETL jobs to run and access S3 bucket
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - glue.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+# IAM Role - end
+
+# S3 buckets - start
+# etl-source-bucket
+  jsonStorageDatabase:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: dev-etl-src-test-json-storage-us-east-1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+# ETL_Destination
+  parquetStorageDatabase:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: dev-etl-dest-test-json-storage-us-east-1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  scriptStorageDatabase:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: dev-sam-pankesh-etl-script-storage
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  tmpStorageDatabase:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: dev-sam-pankesh-etl-script-tmp-storage
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+
+# S3 bucket - end
+
+  
+
+# glue job
+  # DLC_ETL_Glue_Job
+  TransformJsonDataJob:
+    Type: "AWS::Glue::Job"
+    Properties:
+      Role: !GetAtt AWSGlueETLJobRole.Arn 
+      Name: "TransformJsonToParquet"
+      Description: "Trasform JSON to Parquet"
+      WorkerType: G.1X
+      NumberOfWorkers: 2
+      GlueVersion: 5.0
+      MaxRetries: 0
+      ExecutionClass: FLEX
+      ExecutionProperty: 
+        MaxConcurrentRuns: 1
+      Command:
+        "Name": "glueetl"
+        "ScriptLocation" : s3://dev-etl-script-storage-us-east-1/transform_json_to_parquet.py
+
+# glue crawler
+
+
+# EventBridge
+  # DLC_EventBridge_Trigger_ETL_Glue_Job
+  # DLC_IoT_DataLake_Calculation
+
+
+
+# lambda functions
+  # DLC_Lambda_Trigger_ETL_Job
+  # DLC_Generate_Athena_Query
+
+
+  
+
+
+# DynamoDB Table 
+#DLC_DataLake_Config
+  dlcDataLakeConfig:
+    Type: AWS::Serverless::SimpleTable
+    UpdateReplacePolicy: Retain  
+    DeletionPolicy: Retain
+    Properties:
+      TableName: IoT_DLC_Config
+      PrimaryKey:
+        Name: thingType
+        Type: String
+
+  dlcDataLakeMetrics:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain  
+    DeletionPolicy: Retain
+    Properties:
+      TableName: IoT_DLC_Metrics
+      KeySchema:
+        - AttributeName: externalKey
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: externalKey
+          AttributeType: S
+      ProvisionedThroughput:
+        ReadCapacityUnits: 4
+        WriteCapacityUnits: 4
