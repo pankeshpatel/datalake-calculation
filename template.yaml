@@ -8,20 +8,20 @@ Globals:
     MemorySize: 128
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: hello-world/
-      Handler: app.lambdaHandler
-      Runtime: nodejs20.x
-      Architectures:
-        - x86_64
-      Events:
-        HelloWorld:
-          Type: Api 
-          Properties:
-            Path: /hello
-            Method: get
+  # HelloWorldFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: hello-world/
+  #     Handler: app.lambdaHandler
+  #     Runtime: nodejs20.x
+  #     Architectures:
+  #       - x86_64
+  #     Events:
+  #       HelloWorld:
+  #         Type: Api 
+  #         Properties:
+  #           Path: /hello
+  #           Method: get
 
 # IAM Role - start
   AWSGlueETLJobRole:
@@ -57,6 +57,45 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
         - arn:aws:iam::aws:policy/IAMFullAccess
+
+  GlueJobLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GlueJobLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: "logs:CreateLogGroup"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - "*"  # Be specific in assigning resources,
+
+        - PolicyName: GlueExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "glue:StartJobRun"
+                  - "glue:GetJobRun"
+                  - "glue:GetJobRuns"
+                  - "glue:BatchGetJobs"
+                Resource: 
+                  - "*"  # Be specific in assigning resources
 
 # IAM Role - end
 
@@ -106,11 +145,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-
-
 # S3 bucket - end
-
-  
 
 # glue job
   # DLC_ETL_Glue_Job
@@ -192,7 +227,46 @@ Resources:
 
 # lambda functions
   # DLC_Lambda_Trigger_ETL_Job
-  # DLC_Generate_Athena_Query
+  # dlcTriggerETLJob:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: DLC_Trigger_ETL_Job
+  #     Description: Trigger a glue etl job periodically
+  #     CodeUri: lambdas/DLC_Trigger_ETL_Job
+  #     Handler: index.handler
+  #     Runtime: nodejs20.x
+  #     MemorySize: 128
+  #     Timeout: 3
+  #     Role: !GetAtt GlueJobLambdaRole.Arn 
+
+  
+  # # DLC_Generate_Athena_Query
+  # apiGenerateAthenaQuery:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: DLC_Generate_Athena_Query
+  #     Description: Takes DLC requests and Generate Athena Query
+  #     CodeUri: lambdas/API_Generate_Athena_Query
+  #     Handler: index.handler
+  #     Runtime: nodejs20.x
+  #     MemorySize: 128
+  #     Timeout: 300
+  #     # Policies: 
+  #     #   # Add Role/ Policy DynamoDB, Lambda basic execution
+
+  # iotDataLakeCalculation:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: DLC_Trigger_ETL_Job
+  #     Description: perform data lake calculation by trigger athena query
+  #     CodeUri: lambdas/IoT_DataLake_Calculation
+  #     Handler: index.handler
+  #     Runtime: nodejs20.x
+  #     MemorySize: 128
+  #     Timeout: 480
+  #     # Policies: 
+  #     #   # Add Role/ Policy Athena, DynamoDB, Lambda basic execution
+
 
 # DynamoDB Table 
 #DLC_DataLake_Config
