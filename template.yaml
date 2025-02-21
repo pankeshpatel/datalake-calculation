@@ -41,6 +41,23 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
+  JsonToParquetETLCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Json_To_Parquet_ETL_CrawlerRole
+      Description: Allows Crawler to crawl s3 bucket
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: glue.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+        - arn:aws:iam::aws:policy/IAMFullAccess
+
 # IAM Role - end
 
 # S3 buckets - start
@@ -115,21 +132,67 @@ Resources:
         "ScriptLocation" : s3://dev-etl-script-storage-us-east-1/transform_json_to_parquet.py
 
 # glue crawler
+  JsonToParquetETLCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: JsonToParquetETLCrawler
+      Description: Crawls Parqurt files created by ETL job
+      Role: !GetAtt JsonToParquetETLCrawlerRole.Arn 
+      DatabaseName: !Ref iotGlueDatabase
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_EVERYTHING
+      Targets:
+          S3Targets:
+            - Path: !Sub s3://dev-etl-dest-test-json-storage-us-east-1/
 
+  iotGlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Description: IoT Glue Database for Analytics
+        Name: iot-analytics-database-0
+
+  thingTypeCombinedGlueTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref iotGlueDatabase
+      TableInput:
+        Description: Combined Table for all Thing Type values for this Account
+        Name: iot-thing-type-combined
+        StorageDescriptor:
+          Columns:
+            - Name: externalkey
+              Type: string
+            - Name: thingtype
+              Type: string
+            - Name: timestamp
+              Type: timestamp
 
 # EventBridge
   # DLC_EventBridge_Trigger_ETL_Glue_Job
   # DLC_IoT_DataLake_Calculation
+
+  # Sample code --
+
+    # checkOfflineStatusEvent:
+    # Type: AWS::Events::Rule
+    # Condition: EnableCheckOfflineStatusEventBridgeRuleCondition
+    # Properties:
+    #   Name: Check_Offline_Status
+    #   Description: Trigger
+    #   ScheduleExpression: cron(0/2 * * * ? *) # every 2 minutes
+    #   State: ENABLED
+    #   Targets:
+    #     - Id: IoT_Heart_Beat_Monitor_Event_Target
+    #       Arn: !GetAtt deviceConnectionManagerFunction.Arn
 
 
 
 # lambda functions
   # DLC_Lambda_Trigger_ETL_Job
   # DLC_Generate_Athena_Query
-
-
-  
-
 
 # DynamoDB Table 
 #DLC_DataLake_Config
