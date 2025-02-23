@@ -97,6 +97,81 @@ Resources:
                 Resource: 
                   - "*"  # Be specific in assigning resources
 
+  DlcEventBridgeTriggerEtlGlueJobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DLCEventBridgeTriggerETLGlueJobPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt dlcTriggerETLJob.Arn
+  
+  DlcEventBridgeIotDataLakeCalculationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DLCIotDataLakeCalculationPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt iotDataLakeCalculation.Arn
+
+  DataLakeCalculationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DataLakeCalculationLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AthenaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "athena:StartQueryExecution"
+                  - "athena:GetQueryExecution"
+                  - "athena:GetQueryResults"
+                  - "athena:GetQueryResultsStream"
+                  - "athena:GetWorkGroup"
+                  - "athena:ListWorkGroups"
+                  - "athena:ListQueryExecutions"
+                  - "athena:ListDatabases"
+                  - "athena:ListDataCatalogs"
+                  - "athena:ListTableMetadata"
+                  - "athena:GetTableMetadata"
+                Resource:
+                  - "*"  # Be specific in assigning resources
 # IAM Role - end
 
 # S3 buckets - start
@@ -164,7 +239,9 @@ Resources:
         MaxConcurrentRuns: 1
       Command:
         "Name": "glueetl"
-        "ScriptLocation" : s3://dev-etl-script-storage-us-east-1/transform_json_to_parquet.py
+        # Cross Account S3 Access
+        "ScriptLocation" : s3://etl-script-storage-us-east-1/transform_json_to_parquet.py 
+        # "ScriptLocation": s3://dev-etl-script-storage-us-east-1/transform_json_to_parquet.py
 
 # glue crawler
   JsonToParquetETLCrawler:
@@ -222,22 +299,47 @@ Resources:
     #   Targets:
     #     - Id: IoT_Heart_Beat_Monitor_Event_Target
     #       Arn: !GetAtt deviceConnectionManagerFunction.Arn
+    
+       
+  dlcEventBridgeTriggerEtlGlueJob:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DLC_EventBridge_Trigger_ETL_Glue_Job
+      ScheduleExpression: rate(5 minutes)
+      State: DISABLED
+      EventBusName: default
+      Targets:
+        - Id: TrigerLambda
+          Arn: !GetAtt dlcTriggerETLJob.Arn
+          RoleArn: !GetAtt DlcEventBridgeTriggerEtlGlueJobRole.Arn
 
+  # DLC_IoT_DataLake_Calculation
+  dlcIotDataLakeCalculation:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DLC_IoT_DataLake_Calculation
+      ScheduleExpression: rate(5 minutes)
+      State: DISABLED
+      EventBusName: default
+      Targets:
+        - Id: TrigerLambda
+          Arn: !GetAtt iotDataLakeCalculation.Arn
+          RoleArn: !GetAtt DlcEventBridgeIotDataLakeCalculationRole.Arn
 
 
 # lambda functions
   # DLC_Lambda_Trigger_ETL_Job
-  # dlcTriggerETLJob:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: DLC_Trigger_ETL_Job
-  #     Description: Trigger a glue etl job periodically
-  #     CodeUri: lambdas/DLC_Trigger_ETL_Job
-  #     Handler: index.handler
-  #     Runtime: nodejs20.x
-  #     MemorySize: 128
-  #     Timeout: 3
-  #     Role: !GetAtt GlueJobLambdaRole.Arn 
+  dlcTriggerETLJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DLC_Trigger_ETL_Job
+      Description: Trigger a glue etl job periodically
+      CodeUri: lambdas/DLC_Trigger_ETL_Job
+      Handler: index.handler
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 3
+      Role: !GetAtt GlueJobLambdaRole.Arn 
 
   
   # # DLC_Generate_Athena_Query
@@ -254,18 +356,20 @@ Resources:
   #     # Policies: 
   #     #   # Add Role/ Policy DynamoDB, Lambda basic execution
 
-  # iotDataLakeCalculation:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: DLC_Trigger_ETL_Job
-  #     Description: perform data lake calculation by trigger athena query
-  #     CodeUri: lambdas/IoT_DataLake_Calculation
-  #     Handler: index.handler
-  #     Runtime: nodejs20.x
-  #     MemorySize: 128
-  #     Timeout: 480
-  #     # Policies: 
-  #     #   # Add Role/ Policy Athena, DynamoDB, Lambda basic execution
+  iotDataLakeCalculation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: IoT_DataLake_Calculation
+      Description: perform data lake calculation by trigger athena query
+      CodeUri: lambdas/IoT_DataLake_Calculation
+      Handler: index.handler
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 480
+      # Add rew role
+      # Policies: 
+      #   # Add Role/ Policy Athena, DynamoDB, Lambda basic execution
+      Role: !GetAtt DataLakeCalculationLambdaRole.Arn
 
 
 # DynamoDB Table 
