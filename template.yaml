@@ -139,6 +139,31 @@ Resources:
                 Resource:
                   - !GetAtt iotDataLakeCalculation.Arn
 
+  ApiGenerateAthenaQueryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ApiGenerateAthenaQueryLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:PutItem"
+                  - "dynamodb:GetItem"
+                Resource:
+                  - !GetAtt dlcDataLakeConfig.Arn
+
   DataLakeCalculationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -342,19 +367,21 @@ Resources:
       Role: !GetAtt GlueJobLambdaRole.Arn 
 
   
-  # # DLC_Generate_Athena_Query
-  # apiGenerateAthenaQuery:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: DLC_Generate_Athena_Query
-  #     Description: Takes DLC requests and Generate Athena Query
-  #     CodeUri: lambdas/API_Generate_Athena_Query
-  #     Handler: index.handler
-  #     Runtime: nodejs20.x
-  #     MemorySize: 128
-  #     Timeout: 300
-  #     # Policies: 
-  #     #   # Add Role/ Policy DynamoDB, Lambda basic execution
+  # DLC_Generate_Athena_Query
+  apiGenerateAthenaQuery:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DLC_Generate_Athena_Query
+      Description: Takes DLC requests and Generate Athena Query
+      CodeUri: lambdas/API_Generate_Athena_Query
+      Handler: index.handler
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 300
+      Role: !GetAtt ApiGenerateAthenaQueryLambdaRole.Arn
+      Environment:
+        Variables:
+          DLC_DATA_LAKE_CONFIG_TABLE: !Ref dlcDataLakeConfig
 
   iotDataLakeCalculation:
     Type: AWS::Serverless::Function
