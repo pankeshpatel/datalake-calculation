@@ -2,7 +2,7 @@ const { GlueClient, StartJobRunCommand } = require("@aws-sdk/client-glue");
 
 const client = new GlueClient({});
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   const params = {
     JobName: "TransformJsonToParquet", // Replace with your Glue job name
     Arguments: { // Add Arguments object
