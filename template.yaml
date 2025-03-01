@@ -195,8 +195,43 @@ Resources:
                   - "athena:ListDataCatalogs"
                   - "athena:ListTableMetadata"
                   - "athena:GetTableMetadata"
+                  # glue get database
+                  - "glue:GetDatabase"
+                  - "glue:GetDatabases"
+                  - "glue:GetTable"
+                  - "glue:GetTables"
+                  - "glue:GetTableVersions"
+                  - "glue:GetTableVersion"
                 Resource:
                   - "*"  # Be specific in assigning resources
+        - PolicyName: DynamoDBExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:PutItem"
+                  - "dynamodb:GetItem"
+                Resource:
+                  - !GetAtt dlcDataLakeMetrics.Arn
+                  - !GetAtt dlcDataLakeConfig.Arn
+        - PolicyName: S3ExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketLocation"
+                Resource:
+                  - !GetAtt parquetStorageDatabase.Arn
+                  - !GetAtt tmpStorageDatabase.Arn
+                  - !Sub ${parquetStorageDatabase.Arn}/*
+                  - !Sub ${tmpStorageDatabase.Arn}/*
+                  
+                 
 # IAM Role - end
 
 # S3 buckets - start
@@ -393,11 +428,15 @@ Resources:
       Runtime: nodejs20.x
       MemorySize: 128
       Timeout: 480
-      # Add rew role
-      # Policies: 
-      #   # Add Role/ Policy Athena, DynamoDB, Lambda basic execution
       Role: !GetAtt DataLakeCalculationLambdaRole.Arn
-
+      Environment:
+        Variables:
+          DLC_DATA_LAKE_CONFIG_TABLE: !Ref dlcDataLakeConfig
+          DLC_DATA_LAKE_METRICS_TABLE: !Ref dlcDataLakeMetrics
+          DLC_ATHENA_DATABASE: !Ref iotGlueDatabase
+          DLC_ATHENA_WORKGROUP: primary
+          DLC_ATHENA_QUERY_RESULT_BUCKET: !Ref tmpStorageDatabase
+          THING_TYPE: "BEVI_Device"
 
 # DynamoDB Table 
 #DLC_DataLake_Config
@@ -418,11 +457,15 @@ Resources:
     Properties:
       TableName: IoT_DLC_Metrics
       KeySchema:
-        - AttributeName: externalKey
+        - AttributeName: key
           KeyType: HASH
+        - AttributeName: datetime
+          KeyType: RANGE  # Added sort key
       AttributeDefinitions:
-        - AttributeName: externalKey
+        - AttributeName: key
           AttributeType: S
+        - AttributeName: datetime
+          AttributeType: S 
       ProvisionedThroughput:
         ReadCapacityUnits: 4
         WriteCapacityUnits: 4

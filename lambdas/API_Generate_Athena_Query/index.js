@@ -54,7 +54,7 @@ exports.handler = async (event) => {
     SELECT 
         ${selectFields.join(",\n        ")}
     FROM 
-        "default"."data_lake_calculations" dlc
+        "dev_etl_dest_test_json_storage_us_east_1" dlc
     JOIN 
         TimeRanges tr ON dlc."messagetimestamp" >= tr.start_ts AND dlc."messagetimestamp" < tr.end_ts
     GROUP BY 
@@ -71,7 +71,7 @@ exports.handler = async (event) => {
         t.col_name,
         t.occurrences,
         COUNT(*) AS count
-    FROM "default"."data_lake_calculations" dlc
+    FROM "dev_etl_dest_test_json_storage_us_east_1" dlc
     JOIN TimeRanges tr 
         ON dlc."messagetimestamp" >= tr.start_ts 
         AND dlc."messagetimestamp" < tr.end_ts

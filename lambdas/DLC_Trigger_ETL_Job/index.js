@@ -6,11 +6,11 @@ exports.handler = async (event) => {
   const params = {
     JobName: "TransformJsonToParquet", // Replace with your Glue job name
     Arguments: { // Add Arguments object
-      "--year": "2024",
-      "--month": "08",
-      "--day": "02",
+      "--year": "2025",
+      "--month": "01",
+      "--day": "15",
       "--hr": "17",
-      "--thingType": "Brewing_Keg"
+      "--thingType": "BEVI_Device"
     },
   };
 
